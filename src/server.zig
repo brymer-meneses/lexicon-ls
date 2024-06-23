@@ -3,49 +3,47 @@ const std = @import("std");
 pub const DecodeResult = struct {};
 pub const DecodeError = std.fmt.ParseIntError;
 
-pub const Server = struct {
-    const Self = @This();
+fn GenericServer(comptime Reader: type, comptime Writer: type) type {
+    return struct {
+        const Self = @This();
 
-    reader: *std.io.AnyReader,
-    writer: *std.io.AnyWriter,
+        reader: Reader,
+        writer: Writer,
 
-    pub fn init() Self {
-        const stdin = std.io.getStdIn();
-        const stdout = std.io.getStdIn();
-        var buf = std.io.bufferedReader(stdin.reader());
+        pub fn start(self: *Self) anyerror!void {
+            var msgbuf: [4096]u8 = undefined;
+            const msg = try self.reader.readUntilDelimiterOrEof(&msgbuf, '\r');
 
-        const reader = buf.reader();
-        const writer = stdout.writer();
-
-        return .{
-            .reader = @as(*std.io.AnyReader, @as(*anyopaque, &reader)),
-            .writer = @as(*std.io.AnyWriter, @as(*anyopaque, &writer)),
-        };
-    }
-
-    pub fn start(self: *Server) void {
-        var msgbuf: [4096]u8 = undefined;
-        const msg = try self.reader.readUntilDelimiterOrEof(&msgbuf, '\r');
-
-        while (true) {
-            const header = self.decode(msg);
-            _ = header;
-        }
-    }
-
-    fn decode(_: *Server, header: []const u8) DecodeError!DecodeResult {
-        const contentLength = "Content-Length: ";
-        if (!std.mem.startsWith(u8, header, contentLength)) {
-            std.debug.panic("Failed to get header, got {s}", .{header[0..contentLength.len]});
+            while (true) {
+                if (msg) |m| {
+                    const header = self.decode(m) catch unreachable;
+                    _ = header;
+                }
+            }
         }
 
-        const lengthString = header[contentLength.len..header.len];
-        const length = try std.fmt.parseInt(u64, lengthString, 10);
+        fn decode(_: *Self, header: []const u8) DecodeError!DecodeResult {
+            const contentLength = "Content-Length: ";
+            if (!std.mem.startsWith(u8, header, contentLength)) {
+                std.debug.panic("Failed to get header, got {s}", .{header[0..contentLength.len]});
+            }
 
-        std.log.debug("log: {d}", .{length});
+            const lengthString = header[contentLength.len..header.len];
 
-        return .{};
-    }
+            const length = try std.fmt.parseInt(u64, lengthString, 10);
 
-    fn encode(_: *Server, _: anytype) void {}
-};
+            std.log.debug("log: {d}", .{length});
+
+            return .{};
+        }
+
+        fn encode(_: *Self, _: anytype) void {}
+    };
+}
+
+pub fn Server(reader: anytype, writer: anytype) GenericServer(@TypeOf(reader), @TypeOf(writer)) {
+    return .{
+        .reader = reader,
+        .writer = writer,
+    };
+}

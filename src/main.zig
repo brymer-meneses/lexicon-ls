@@ -6,6 +6,15 @@ pub const std_options = .{
 };
 
 pub fn main() !void {
-    var server = Server.init();
-    server.start();
+    const stdin = std.io.getStdIn();
+    const stdout = std.io.getStdIn();
+    var buf = std.io.bufferedReader(stdin.reader());
+
+    const reader = buf.reader();
+    const writer = stdout.writer();
+    var server = Server(reader, writer);
+
+    server.start() catch |err| {
+        std.debug.panic("{any}", .{err});
+    };
 }
