@@ -1,0 +1,54 @@
+const std = @import("std");
+
+pub fn decode(allocator: std.mem.Allocator, reader: anytype) anyerror![]const u8 {
+    var headerBuffer: [36]u8 = undefined;
+
+    if (try reader.readUntilDelimiterOrEof(&headerBuffer, '\r')) |header| {
+        const contentLengthString = headerBuffer[("Content-Length: ".len)..header.len];
+        const contentLength = try std.fmt.parseInt(u64, contentLengthString, 10);
+        try reader.skipBytes(3, .{}); // skip \n\r\n
+
+        const content = try allocator.alloc(u8, contentLength);
+        const parsedContentSize = try reader.readAtLeast(content, contentLength);
+        std.debug.assert(parsedContentSize == contentLength);
+
+        return content;
+    } else {
+        std.debug.panic("Invalid content passed\n", .{});
+    }
+}
+
+pub fn encode(allocator: std.mem.Allocator, writer: anytype, value: anytype) anyerror!void {
+    const content = try std.json.stringifyAlloc(allocator, value, .{ .whitespace = .minified });
+    defer allocator.free(content);
+
+    try writer.print("Content-Length: {d}\r\n\r\n{s}", .{ content.len, content });
+}
+
+test "rpc encode" {
+    const allocator = std.testing.allocator;
+
+    const value = .{ .message = "Hi there!" };
+
+    const buffer = try allocator.alloc(u8, 64);
+    defer allocator.free(buffer);
+
+    var stream = std.io.fixedBufferStream(buffer);
+    const writer = stream.writer();
+
+    try encode(allocator, writer, value);
+
+    try std.testing.expectStringStartsWith(buffer, "Content-Length: 23\r\n\r\n{\"message\":\"Hi there!\"}");
+}
+
+test "rpc decode" {
+    const allocator = std.testing.allocator;
+    const value = "Content-Length: 23\r\n\r\n{\"message\":\"Hi there!\"}";
+
+    var stream = std.io.fixedBufferStream(value);
+    const reader = stream.reader();
+    const content = try decode(allocator, reader);
+    defer allocator.free(content);
+
+    try std.testing.expectEqual(23, content.len);
+}
