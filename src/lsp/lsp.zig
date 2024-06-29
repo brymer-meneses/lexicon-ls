@@ -24,7 +24,7 @@ fn GenericServer(Writer: type, Reader: type) type {
         }
 
         pub fn initialize(self: *Self, header: types.RequestHeader, _: types.InitializeRequestParams) anyerror!void {
-            try rpc.encode(
+            try rpc.send(
                 self.allocator,
                 self.writer,
                 .{

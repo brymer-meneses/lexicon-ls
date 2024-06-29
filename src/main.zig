@@ -31,7 +31,7 @@ pub fn main() anyerror!void {
     var server = lsp.server(allocator, writer, reader);
 
     while (true) {
-        const content = try rpc.decode(allocator, reader);
+        const content = try rpc.receive(allocator, reader);
         defer allocator.free(content);
 
         const requestHeader = try std.json.parseFromSlice(
