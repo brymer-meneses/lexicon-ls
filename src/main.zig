@@ -41,19 +41,39 @@ pub fn main() anyerror!void {
         defer requestHeader.deinit();
 
         if (std.mem.eql(u8, requestHeader.value.method, "initialize")) {
-            const initializeRequest = try std.json.parseFromSlice(
+            const request = try std.json.parseFromSlice(
                 struct { params: lsp.InitializeRequestParams },
                 allocator,
                 content,
                 jsonOptions,
             );
-            defer initializeRequest.deinit();
+            defer request.deinit();
 
-            try lsp.handleInitializeRequest(allocator, writer, requestHeader.value, initializeRequest.value.params);
+            try lsp.handleInitializeRequest(allocator, writer, requestHeader.value, request.value.params);
+        } else if (std.mem.eql(u8, requestHeader.value.method, "textDocument/didOpen")) {
+            const request = try std.json.parseFromSlice(
+                struct { params: lsp.DidOpenTextDocumentParams },
+                allocator,
+                content,
+                jsonOptions,
+            );
+            defer request.deinit();
+
+            try lsp.handleTextDocumentDidOpen(allocator, writer, requestHeader.value, request.value.params);
+        } else if (std.mem.eql(u8, requestHeader.value.method, "textDocument/didChange")) {
+            const request = try std.json.parseFromSlice(
+                struct { params: lsp.DidChangeTextDocumentParams },
+                allocator,
+                content,
+                jsonOptions,
+            );
+            defer request.deinit();
+
+            try lsp.handleTextDocumentDidChange(allocator, writer, requestHeader.value, request.value.params);
         } else if (std.mem.eql(u8, requestHeader.value.method, "initialized")) {
             std.log.debug("Successfully initialized with client!", .{});
         } else {
-            std.debug.panic("Unknown Method {s}", .{requestHeader.value.method});
+            std.log.debug("Got Method {s}", .{requestHeader.value.method});
         }
     }
 }
