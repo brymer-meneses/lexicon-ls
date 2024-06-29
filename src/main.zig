@@ -1,5 +1,5 @@
 const std = @import("std");
-const lsp = @import("lsp.zig");
+const lsp = @import("lsp/lsp.zig");
 const rpc = @import("rpc.zig");
 
 pub const std_options = .{
@@ -28,12 +28,14 @@ pub fn main() anyerror!void {
         .allocate = .alloc_always,
     };
 
+    var server = lsp.server(allocator, writer, reader);
+
     while (true) {
         const content = try rpc.decode(allocator, reader);
         defer allocator.free(content);
 
         const requestHeader = try std.json.parseFromSlice(
-            lsp.RequestHeader,
+            lsp.types.RequestHeader,
             allocator,
             content,
             jsonOptions,
@@ -42,34 +44,34 @@ pub fn main() anyerror!void {
 
         if (std.mem.eql(u8, requestHeader.value.method, "initialize")) {
             const request = try std.json.parseFromSlice(
-                struct { params: lsp.InitializeRequestParams },
+                struct { params: lsp.types.InitializeRequestParams },
                 allocator,
                 content,
                 jsonOptions,
             );
             defer request.deinit();
 
-            try lsp.handleInitializeRequest(allocator, writer, requestHeader.value, request.value.params);
+            try server.initialize(requestHeader.value, request.value.params);
         } else if (std.mem.eql(u8, requestHeader.value.method, "textDocument/didOpen")) {
             const request = try std.json.parseFromSlice(
-                struct { params: lsp.DidOpenTextDocumentParams },
+                struct { params: lsp.types.DidOpenTextDocumentParams },
                 allocator,
                 content,
                 jsonOptions,
             );
             defer request.deinit();
 
-            try lsp.handleTextDocumentDidOpen(allocator, writer, requestHeader.value, request.value.params);
+            try server.textDocumentDidOpen(request.value.params);
         } else if (std.mem.eql(u8, requestHeader.value.method, "textDocument/didChange")) {
             const request = try std.json.parseFromSlice(
-                struct { params: lsp.DidChangeTextDocumentParams },
+                struct { params: lsp.types.DidChangeTextDocumentParams },
                 allocator,
                 content,
                 jsonOptions,
             );
             defer request.deinit();
 
-            try lsp.handleTextDocumentDidChange(allocator, writer, requestHeader.value, request.value.params);
+            try server.textDocumentDidChange(request.value.params);
         } else if (std.mem.eql(u8, requestHeader.value.method, "initialized")) {
             std.log.debug("Successfully initialized with client!", .{});
         } else {
