@@ -11,6 +11,11 @@ pub const InitializeRequestParams = struct {
     },
     locale: ?[]const u8 = null,
     rootPath: ?[]const u8 = null,
+
+    initializationOptions: struct {
+        java_path: []const u8,
+        languagetool_path: []const u8,
+    },
 };
 
 pub const InitializedResponse = struct {

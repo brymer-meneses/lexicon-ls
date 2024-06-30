@@ -1,6 +1,7 @@
 const std = @import("std");
 const rpc = @import("../rpc.zig");
 pub const types = @import("types.zig");
+pub const languagetool = @import("../backend/languagetool.zig");
 
 fn GenericServer(Writer: type, Reader: type) type {
     return struct {
@@ -9,7 +10,9 @@ fn GenericServer(Writer: type, Reader: type) type {
         allocator: std.mem.Allocator,
 
         java_path: ?[]const u8 = null,
+
         languagetool_path: ?[]const u8 = null,
+        languagetool_server_thread: ?std.Thread = null,
 
         const Self = @This();
 
@@ -23,7 +26,20 @@ fn GenericServer(Writer: type, Reader: type) type {
             }
         }
 
-        pub fn initialize(self: *Self, header: types.RequestHeader, _: types.InitializeRequestParams) anyerror!void {
+        pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
+            self.java_path = params.initializationOptions.java_path;
+            self.languagetool_path = params.initializationOptions.languagetool_path;
+
+            self.languagetool_server_thread = try std.Thread.spawn(
+                .{ .allocator = self.allocator },
+                languagetool.spawnServer,
+                .{
+                    self.allocator,
+                    params.initializationOptions.java_path,
+                    params.initializationOptions.languagetool_path,
+                },
+            );
+
             try rpc.send(
                 self.allocator,
                 self.writer,

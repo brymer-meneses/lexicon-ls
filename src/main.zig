@@ -79,7 +79,10 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
         );
         defer requestHeader.deinit();
 
-        if (std.mem.eql(u8, requestHeader.value.method, "initialize")) {
+        const method = requestHeader.value.method;
+
+        if (std.mem.eql(u8, method, "initialize")) {
+            // TODO: gracefully handle initialization errors
             const request = try std.json.parseFromSlice(
                 struct { params: lsp.types.InitializeRequestParams },
                 allocator,
@@ -89,9 +92,11 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
             defer request.deinit();
 
             try server.initialize(requestHeader.value, request.value.params);
-        } else if (std.mem.eql(u8, requestHeader.value.method, "initialized")) {
+        } else if (std.mem.eql(u8, method, "initialized")) {
             std.log.debug("Successfully initialized with client!", .{});
-        } else if (std.mem.eql(u8, requestHeader.value.method, "textDocument/didOpen")) {
+        } else if (std.mem.eql(u8, method, "shutdown")) {
+            // todo graceful shutdown
+        } else if (std.mem.eql(u8, method, "textDocument/didOpen")) {
             const request = try std.json.parseFromSlice(
                 struct { params: lsp.types.DidOpenTextDocumentParams },
                 allocator,
@@ -101,7 +106,7 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
             defer request.deinit();
 
             try server.textDocumentDidOpen(request.value.params);
-        } else if (std.mem.eql(u8, requestHeader.value.method, "textDocument/didChange")) {
+        } else if (std.mem.eql(u8, method, "textDocument/didChange")) {
             const request = try std.json.parseFromSlice(
                 struct { params: lsp.types.DidChangeTextDocumentParams },
                 allocator,
@@ -112,7 +117,7 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
 
             try server.textDocumentDidChange(request.value.params);
         } else {
-            std.log.debug("Got Method {s}", .{requestHeader.value.method});
+            std.log.debug("Got Method {s}", .{method});
         }
     }
 }
