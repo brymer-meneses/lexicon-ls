@@ -6,22 +6,59 @@ pub const std_options = .{
     .logFn = @import("log.zig").log,
 };
 
-test {
-    std.testing.refAllDecls(rpc);
-}
+const helpMessage =
+    \\ An open-source grammar-checker that uses LanguageTool
+    \\ 
+    \\ Usage [command] [options]
+    \\ 
+    \\ Commands:
+    \\
+    \\      lsp         run as an LSP server
+    \\      lint        run as a linter
+    \\  
+    \\      help        print this help message and exit
+    \\      version     print version number and exit
+;
 
 pub fn main() anyerror!void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+
+    const allocator = gpa.allocator();
+
+    // Parse args into string array (error union needs 'try')
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len <= 1) {
+        std.debug.print(helpMessage, .{});
+        return;
+    }
+
+    const command = args[1];
+
+    if (std.mem.eql(u8, command, "help")) {
+        std.debug.print(helpMessage, .{});
+    } else if (std.mem.eql(u8, command, "lsp")) {
+        try lspMain(allocator, args[2..]);
+    } else if (std.mem.eql(u8, command, "version")) {
+        std.debug.print("0.0.1", .{});
+    } else if (std.mem.eql(u8, command, "lint")) {
+        try lintMain(allocator, args[2..]);
+    } else {
+        std.debug.print(helpMessage, .{});
+    }
+}
+
+pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!void {
+    std.debug.print("Entering LSP main\n", .{});
+
     const stdin = std.io.getStdIn();
     const stdout = std.io.getStdOut();
     var buf = std.io.bufferedReader(stdin.reader());
 
     const reader = buf.reader();
     const writer = stdout.writer();
-
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
-    const allocator = gpa.allocator();
 
     const jsonOptions = .{
         .ignore_unknown_fields = true,
@@ -78,4 +115,12 @@ pub fn main() anyerror!void {
             std.log.debug("Got Method {s}", .{requestHeader.value.method});
         }
     }
+}
+
+pub fn lintMain(_: std.mem.Allocator, _: []const []const u8) anyerror!void {
+    std.debug.print("Entering lint main\n", .{});
+}
+
+test {
+    std.testing.refAllDecls(rpc);
 }
