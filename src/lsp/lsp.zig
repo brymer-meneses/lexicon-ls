@@ -1,7 +1,8 @@
 const std = @import("std");
 const rpc = @import("../rpc.zig");
+const languagetool = @import("../backend/languagetool.zig");
+
 pub const types = @import("types.zig");
-pub const languagetool = @import("../backend/languagetool.zig");
 
 fn GenericServer(Writer: type, Reader: type) type {
     return struct {

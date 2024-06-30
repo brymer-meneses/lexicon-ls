@@ -15,6 +15,7 @@ const helpMessage =
     \\
     \\      lsp         run as an LSP server
     \\      lint        run as a linter
+    \\      setup       download languageTool and Java
     \\  
     \\      help        print this help message and exit
     \\      version     print version number and exit
@@ -39,10 +40,12 @@ pub fn main() anyerror!void {
 
     if (std.mem.eql(u8, command, "help")) {
         std.debug.print(helpMessage, .{});
-    } else if (std.mem.eql(u8, command, "lsp")) {
-        try lspMain(allocator, args[2..]);
     } else if (std.mem.eql(u8, command, "version")) {
         std.debug.print("0.0.1", .{});
+    } else if (std.mem.eql(u8, command, "setup")) {
+        std.debug.print("TODO", .{});
+    } else if (std.mem.eql(u8, command, "lsp")) {
+        try lspMain(allocator, args[2..]);
     } else if (std.mem.eql(u8, command, "lint")) {
         try lintMain(allocator, args[2..]);
     } else {
