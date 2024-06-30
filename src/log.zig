@@ -23,7 +23,7 @@ pub fn log(
         std.debug.panic("Failed to read $HOME.\n", .{});
     };
 
-    const path = std.fmt.allocPrint(allocator, "{s}/{s}", .{ home, lexicon_logfile }) catch |err| {
+    const path = std.fs.path.join(allocator, &[_][]const u8{ home, lexicon_logfile }) catch |err| {
         std.debug.panic("Encountered error {any}\n", .{err});
     };
     defer allocator.free(path);
