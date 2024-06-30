@@ -3,7 +3,7 @@ const rpc = @import("../rpc.zig");
 
 pub const types = @import("types.zig");
 
-fn GenericServer(Writer: type, Reader: type) type {
+fn Server(Writer: type, Reader: type) type {
     return struct {
         reader: Reader,
         writer: Writer,
@@ -76,7 +76,7 @@ fn GenericServer(Writer: type, Reader: type) type {
     };
 }
 
-pub fn server(allocator: std.mem.Allocator, writer: anytype, reader: anytype) GenericServer(@TypeOf(writer), @TypeOf(reader)) {
+pub fn server(allocator: std.mem.Allocator, writer: anytype, reader: anytype) Server(@TypeOf(writer), @TypeOf(reader)) {
     return .{
         .allocator = allocator,
         .reader = reader,
