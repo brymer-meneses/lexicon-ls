@@ -52,6 +52,8 @@ pub fn main() anyerror!void {
             defer request.deinit();
 
             try server.initialize(requestHeader.value, request.value.params);
+        } else if (std.mem.eql(u8, requestHeader.value.method, "initialized")) {
+            std.log.debug("Successfully initialized with client!", .{});
         } else if (std.mem.eql(u8, requestHeader.value.method, "textDocument/didOpen")) {
             const request = try std.json.parseFromSlice(
                 struct { params: lsp.types.DidOpenTextDocumentParams },
@@ -72,8 +74,6 @@ pub fn main() anyerror!void {
             defer request.deinit();
 
             try server.textDocumentDidChange(request.value.params);
-        } else if (std.mem.eql(u8, requestHeader.value.method, "initialized")) {
-            std.log.debug("Successfully initialized with client!", .{});
         } else {
             std.log.debug("Got Method {s}", .{requestHeader.value.method});
         }
