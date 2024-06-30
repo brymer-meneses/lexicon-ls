@@ -1,6 +1,5 @@
 const std = @import("std");
 const rpc = @import("../rpc.zig");
-const languagetool = @import("../backend/languagetool.zig");
 
 pub const types = @import("types.zig");
 
@@ -10,10 +9,7 @@ fn GenericServer(Writer: type, Reader: type) type {
         writer: Writer,
         allocator: std.mem.Allocator,
 
-        java_path: ?[]const u8 = null,
-
-        languagetool_path: ?[]const u8 = null,
-        languagetool_server_thread: ?std.Thread = null,
+        languagetool_server_process: ?std.process.Child = null,
 
         const Self = @This();
 
@@ -27,19 +23,32 @@ fn GenericServer(Writer: type, Reader: type) type {
             }
         }
 
-        pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
-            self.java_path = params.initializationOptions.java_path;
-            self.languagetool_path = params.initializationOptions.languagetool_path;
+        pub fn shutdown(self: *Self) void {
+            if (self.languagetool_server_process) |process| {
+                process.kill();
+            }
+        }
 
-            self.languagetool_server_thread = try std.Thread.spawn(
-                .{ .allocator = self.allocator },
-                languagetool.spawnServer,
-                .{
-                    self.allocator,
+        pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
+            var process = std.process.Child.init(
+                &[_][]const u8{
                     params.initializationOptions.java_path,
-                    params.initializationOptions.languagetool_path,
+                    "-cp",
+                    "languagetool-server.jar",
+                    "org.languagetool.server.HTTPServer",
+                    "--config",
+                    "server.properties",
+                    "--port",
+                    "8081",
+                    "--allow-origin",
                 },
+                self.allocator,
             );
+            process.cwd = params.initializationOptions.languagetool_path;
+
+            self.languagetool_server_process = process;
+
+            try process.spawn();
 
             try rpc.send(
                 self.allocator,
