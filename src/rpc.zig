@@ -50,5 +50,9 @@ test "rpc receive" {
     const content = try receive(allocator, reader);
     defer allocator.free(content);
 
+    const received = try std.json.parseFromSlice(struct { message: []const u8 }, allocator, content, .{});
+    defer received.deinit();
+
     try std.testing.expectEqual(23, content.len);
+    try std.testing.expectEqualStrings(received.value.message, "Hi there!");
 }
