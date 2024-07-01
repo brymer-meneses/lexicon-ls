@@ -24,13 +24,7 @@ pub const InitializedResponse = struct {
 
         textDocumentSync: struct {
             openClose: bool,
-            change: Kind,
-
-            const Kind = enum(u8) {
-                None = 0,
-                Full = 1,
-                Incremental = 2,
-            };
+            change: u2,
         },
     },
 
@@ -38,6 +32,12 @@ pub const InitializedResponse = struct {
         name: []const u8,
         version: []const u8,
     },
+};
+
+pub const TextDocumentSyncKind = enum(i8) {
+    None = 0,
+    Full = 1,
+    Incremental = 2,
 };
 
 pub const TextDocumentItem = struct {

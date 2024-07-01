@@ -98,7 +98,8 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
         } else if (std.mem.eql(u8, method, "initialized")) {
             std.log.debug("Successfully initialized with client!", .{});
         } else if (std.mem.eql(u8, method, "shutdown")) {
-            server.shutdown();
+            try server.shutdown();
+            break;
         } else if (std.mem.eql(u8, method, "textDocument/didOpen")) {
             const request = try std.json.parseFromSlice(
                 struct { params: lsp.types.DidOpenTextDocumentParams },
