@@ -34,7 +34,7 @@ pub const InitializedResponse = struct {
     },
 };
 
-pub const TextDocumentSyncKind = enum(i8) {
+pub const TextDocumentSyncKind = enum(u2) {
     None = 0,
     Full = 1,
     Incremental = 2,

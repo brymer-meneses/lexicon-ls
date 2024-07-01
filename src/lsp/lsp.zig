@@ -19,7 +19,7 @@ fn Server(Writer: type, Reader: type) type {
 
         pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
             var process = std.process.Child.init(
-                &[_][]const u8{
+                &.{
                     params.initializationOptions.java_path,
                     "-cp",
                     "languagetool-server.jar",
