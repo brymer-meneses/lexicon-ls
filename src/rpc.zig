@@ -25,7 +25,7 @@ pub fn send(allocator: std.mem.Allocator, writer: anytype, value: anytype) anyer
     try writer.print("Content-Length: {d}\r\n\r\n{s}", .{ content.len, content });
 }
 
-test "rpc send" {
+test send {
     const allocator = std.testing.allocator;
 
     const value = .{ .message = "Hi there!" };
@@ -41,7 +41,7 @@ test "rpc send" {
     try std.testing.expectStringStartsWith(buffer, "Content-Length: 23\r\n\r\n{\"message\":\"Hi there!\"}");
 }
 
-test "rpc receive" {
+test receive {
     const allocator = std.testing.allocator;
     const value = "Content-Length: 23\r\n\r\n{\"message\":\"Hi there!\"}";
 
