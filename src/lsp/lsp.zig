@@ -1,5 +1,6 @@
 const std = @import("std");
 const rpc = @import("../rpc.zig");
+const parser = @import("../parsers/parser.zig");
 
 const TextDocument = @import("../text_document.zig").TextDocument;
 
@@ -74,8 +75,11 @@ fn Server(Writer: type, Reader: type) type {
         pub fn textDocumentDidOpen(self: *Self, params: types.DidOpenTextDocumentParams) anyerror!void {
             std.log.debug("URI: {s}\n{s}", .{ params.textDocument.uri, params.textDocument.text });
 
-            const text_document = TextDocument.init(self.allocator, params.textDocument.uri);
-            try self.text_documents.append(text_document);
+            if (try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri)) |doc| {
+                try self.text_documents.append(doc);
+            } else {
+                std.log.warn("Got a null `TextDocument", .{});
+            }
         }
 
         pub fn textDocumentDidChange(_: *Self, params: types.DidChangeTextDocumentParams) anyerror!void {

@@ -81,7 +81,7 @@ test "parse cpp" {
     const source =
         \\ // some comment
         \\ auto fib(u64 num) -> u64 {
-        \\   if num <= 1 {
+        \\   if (num <= 10) {
         \\      return 1;
         \\   } 
         \\

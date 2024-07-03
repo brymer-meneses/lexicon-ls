@@ -48,8 +48,14 @@ pub const Paragraph = struct {
         return null;
     }
 
-    pub fn intoText(_: *Self) []const u8 {
-        return "";
+    pub fn intoText(self: *const Self, allocator: std.mem.Allocator) ![]const u8 {
+        var text = std.ArrayList(u8).init(allocator);
+
+        for (self.lines) |line| {
+            try text.appendSlice(line.contents);
+        }
+
+        return try text.toOwnedSlice();
     }
 };
 

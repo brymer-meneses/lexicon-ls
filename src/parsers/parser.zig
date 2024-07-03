@@ -13,14 +13,16 @@ const Language = enum {
     rust,
 };
 
-pub fn parse(_: std.mem.Allocator, _: []const u8, filename: []const u8) !?TextDocument {
+pub fn parse(allocator: std.mem.Allocator, source: []const u8, filename: []const u8) !?TextDocument {
     if (parseLanguageFromFilename(filename)) |language| {
         switch (language) {
             .python => {
                 return null;
             },
             .c, .cpp => {
-                return null;
+                const Parser = @import("cpp.zig").Parser;
+                var parser = Parser.init(allocator, source, filename);
+                return try parser.parse();
             },
             .zig => {
                 return null;
@@ -55,6 +57,10 @@ fn parseLanguageFromFilename(filename: []const u8) ?Language {
         return Language.zig;
     } else if (std.mem.eql(u8, "md", extension)) {
         return Language.markdown;
+    } else if (std.mem.eql(u8, "cpp", extension)) {
+        return Language.cpp;
+    } else if (std.mem.eql(u8, "c", extension)) {
+        return Language.c;
     }
 
     return null;
@@ -70,6 +76,35 @@ test parseLanguageFromFilename {
         try std.testing.expect(parsed_language != null);
         try std.testing.expectEqual(parsed_language.?, language);
     }
+}
+
+test parse {
+    const source =
+        \\ // This is a very important function
+        \\ // and this is an important documentation
+        \\ u64 fib(u64 n) {
+        \\  if (n <= 1)
+        \\    return 1;
+        \\
+        \\  // fun fact:
+        \\  // this function has an algorithm that is O(1)
+        \\  // it was discovered a long time ago.
+        \\  return fib(n-1) + fib(n-2);
+        \\ }
+    ;
+
+    var doc = try parse(std.testing.allocator, source, "fib.cpp");
+    defer doc.?.deinit();
+    var paragraphIter = doc.?.iter();
+
+    const firstDoc = try paragraphIter.next().?.intoText(std.testing.allocator);
+    defer std.testing.allocator.free(firstDoc);
+
+    const secondDoc = try paragraphIter.next().?.intoText(std.testing.allocator);
+    defer std.testing.allocator.free(secondDoc);
+
+    try std.testing.expectEqualStrings(firstDoc, " This is a very important function and this is an important documentation");
+    try std.testing.expectEqualStrings(secondDoc, " fun fact: this function has an algorithm that is O(1) it was discovered a long time ago.");
 }
 
 test {
