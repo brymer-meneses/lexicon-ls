@@ -1,2 +1,6 @@
 zig-out
 .zig-cache
+
+# test files
+test.cpp
+test.sh

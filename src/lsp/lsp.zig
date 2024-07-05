@@ -3,6 +3,7 @@ const rpc = @import("../rpc.zig");
 const parser = @import("../parsers/parser.zig");
 
 const TextDocument = @import("../text_document.zig").TextDocument;
+const LanguageTool = @import("../backend/LanguageTool.zig");
 
 pub const types = @import("types.zig");
 
@@ -14,30 +15,18 @@ fn Server(Writer: type, Reader: type) type {
         writer: Writer,
         allocator: std.mem.Allocator,
 
-        languagetool_server_process: ?std.process.Child = null,
-
         text_documents: std.ArrayList(TextDocument),
 
+        languagetool: ?LanguageTool = null,
+
         pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
-            var process = std.process.Child.init(
-                &.{
-                    params.initializationOptions.java_path,
-                    "-cp",
-                    "languagetool-server.jar",
-                    "org.languagetool.server.HTTPServer",
-                    "--config",
-                    "server.properties",
-                    "--port",
-                    "8081",
-                    "--allow-origin",
-                },
+            self.languagetool = try LanguageTool.init(
                 self.allocator,
+                params.initializationOptions.java_path,
+                params.initializationOptions.languagetool_path,
+                "8081",
             );
-            process.cwd = params.initializationOptions.languagetool_path;
-
-            self.languagetool_server_process = process;
-
-            try process.spawn();
+            try self.languagetool.?.start();
 
             try rpc.send(
                 self.allocator,
@@ -50,7 +39,7 @@ fn Server(Writer: type, Reader: type) type {
                         .capabilities = .{
                             .positionEncoding = "utf-8",
                             .textDocumentSync = .{
-                                .change = @intFromEnum(types.TextDocumentSyncKind.Incremental),
+                                .change = types.TextDocumentSyncKind.Incremental,
                                 .openClose = true,
                             },
                         },
@@ -67,16 +56,24 @@ fn Server(Writer: type, Reader: type) type {
             for (self.text_documents.items) |*document| {
                 document.deinit();
             }
-            if (self.languagetool_server_process) |*process| {
-                _ = try process.kill();
+
+            self.text_documents.deinit();
+
+            if (self.languagetool) |*languagetool| {
+                try languagetool.deinit();
             }
         }
 
         pub fn textDocumentDidOpen(self: *Self, params: types.DidOpenTextDocumentParams) anyerror!void {
             std.log.debug("URI: {s}\n{s}", .{ params.textDocument.uri, params.textDocument.text });
 
-            if (try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri)) |doc| {
+            var document = try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri);
+            if (document) |doc| {
                 try self.text_documents.append(doc);
+            }
+
+            if (document) |*doc| {
+                _ = try self.languagetool.?.getDiagnostics(doc);
             } else {
                 std.log.warn("Got a null `TextDocument", .{});
             }

@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const RequestHeader = struct {
     method: []const u8,
     id: ?i64 = null,
@@ -21,10 +23,9 @@ pub const InitializeRequestParams = struct {
 pub const InitializedResponse = struct {
     capabilities: struct {
         positionEncoding: []const u8,
-
         textDocumentSync: struct {
             openClose: bool,
-            change: u2,
+            change: TextDocumentSyncKind,
         },
     },
 
@@ -38,6 +39,10 @@ pub const TextDocumentSyncKind = enum(u2) {
     None = 0,
     Full = 1,
     Incremental = 2,
+
+    pub fn jsonStringify(self: TextDocumentSyncKind, jw: anytype) !void {
+        try jw.print("{d}", .{@intFromEnum(self)});
+    }
 };
 
 pub const TextDocumentItem = struct {
@@ -62,14 +67,50 @@ pub const DidChangeTextDocumentParams = struct {
         range: ?Range = null,
         text: []const u8,
     };
+};
 
-    pub const Range = struct {
-        start: Position,
-        end: Position,
+pub const Range = struct {
+    start: Position,
+    end: Position,
+};
 
-        pub const Position = struct {
-            line: u64,
-            character: u64,
-        };
+pub const Position = struct {
+    line: u64,
+    character: u64,
+};
+
+pub const Diagnostic = struct {
+    range: Range,
+    message: []const u8,
+    severity: Severity,
+
+    pub const Severity = enum(u8) {
+        Error = 1,
+        Warning = 2,
+        Information = 3,
+        Hint = 4,
+
+        pub fn jsonStringify(self: Severity, jw: anytype) !void {
+            try jw.print("{d}", .{@intFromEnum(self)});
+        }
     };
 };
+
+test "proper enum encoding" {
+    const allocator = std.testing.allocator;
+    const string = try std.json.stringifyAlloc(
+        allocator,
+        .{ .severity = Diagnostic.Severity.Hint },
+        .{ .whitespace = .minified },
+    );
+    defer allocator.free(string);
+    const string1 = try std.json.stringifyAlloc(
+        allocator,
+        .{ .sync = TextDocumentSyncKind.Incremental },
+        .{ .whitespace = .minified },
+    );
+    defer allocator.free(string1);
+
+    try std.testing.expectEqualStrings("{\"severity\":4}", string);
+    try std.testing.expectEqualStrings("{\"sync\":2}", string1);
+}

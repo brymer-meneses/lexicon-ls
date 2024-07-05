@@ -70,7 +70,7 @@ pub const ParagraphIterator = struct {
     }
 
     pub fn next(self: *Self) ?Paragraph {
-        if (self.index >= self.lines.len) return null;
+        if (self.index >= self.lines.len - 1) return null;
 
         const start = self.index;
         var streak: u64 = 1;
@@ -110,4 +110,6 @@ test ParagraphIterator {
     try std.testing.expectEqualSlices(Line, lines[0..3], iterator.next().?.lines);
     try std.testing.expectEqualSlices(Line, lines[3..4], iterator.next().?.lines);
     try std.testing.expectEqualSlices(Line, lines[4..7], iterator.next().?.lines);
+
+    try std.testing.expectEqual(null, iterator.next());
 }
