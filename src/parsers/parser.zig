@@ -94,12 +94,12 @@ test parse {
 
     var doc = try parse(std.testing.allocator, source, "fib.cpp");
     defer doc.?.deinit();
-    var paragraphIter = doc.?.iter();
+    var blockIter = doc.?.iter();
 
-    const firstDoc = try paragraphIter.next().?.intoText(std.testing.allocator);
+    const firstDoc = try blockIter.next().?.intoText(std.testing.allocator);
     defer std.testing.allocator.free(firstDoc);
 
-    const secondDoc = try paragraphIter.next().?.intoText(std.testing.allocator);
+    const secondDoc = try blockIter.next().?.intoText(std.testing.allocator);
     defer std.testing.allocator.free(secondDoc);
 
     try std.testing.expectEqualStrings(firstDoc, " This is a very important function and this is an important documentation");

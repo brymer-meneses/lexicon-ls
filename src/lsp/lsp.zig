@@ -65,20 +65,30 @@ fn Server(Writer: type, Reader: type) type {
         }
 
         pub fn textDocumentDidOpen(self: *Self, params: types.DidOpenTextDocumentParams) anyerror!void {
-            std.log.debug("URI: {s}\n{s}", .{ params.textDocument.uri, params.textDocument.text });
-
             var document = try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri);
-            if (document) |doc| {
-                try self.text_documents.append(doc);
-            }
 
             if (document) |*doc| {
                 const diagnostics = try self.languagetool.?.getDiagnostics(doc);
-                for (diagnostics) |diagnostic| {
-                    _ = diagnostic;
-                }
+                defer self.languagetool.?.allocator.free(diagnostics);
+
+                try rpc.send(
+                    self.allocator,
+                    self.writer,
+                    .{
+                        .jsonrpc = "2.0",
+                        .method = "textDocument/publishDiagnostics",
+                        .params = types.PublishDiagnosticParams{
+                            .uri = params.textDocument.uri,
+                            .diagnostics = diagnostics,
+                        },
+                    },
+                );
             } else {
                 std.log.warn("Got a null `TextDocument", .{});
+            }
+
+            if (document) |doc| {
+                try self.text_documents.append(doc);
             }
         }
 

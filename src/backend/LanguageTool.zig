@@ -1,6 +1,7 @@
 const std = @import("std");
 const types = @import("../lsp/types.zig");
 const TextDocument = @import("../TextDocument.zig");
+const rpc = @import("../rpc.zig");
 
 const Self = @This();
 
@@ -48,7 +49,7 @@ pub fn deinit(self: *Self) !void {
 }
 
 pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic {
-    var paragraph_iterator = doc.iter();
+    var block_iterator = doc.iter();
     const url = try std.fmt.allocPrint(self.allocator, "http://localhost:{s}/v2/check", .{self.port});
     defer self.allocator.free(url);
 
@@ -58,8 +59,11 @@ pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic
     var payload_storage = std.ArrayList(u8).init(self.allocator);
     defer payload_storage.deinit();
 
-    while (paragraph_iterator.next()) |*paragraph| {
-        const text = try paragraph.intoText(self.allocator);
+    var diagnostics = std.ArrayList(types.Diagnostic).init(self.allocator);
+    defer diagnostics.deinit();
+
+    while (block_iterator.next()) |*block| {
+        const text = try block.intoText(self.allocator);
 
         try encodeParams(
             .{
@@ -79,8 +83,6 @@ pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic
             },
         });
 
-        std.log.debug("{s}", .{response_storage.items});
-
         switch (fetch_result.status) {
             .ok => {},
             else => return error.BadRequest,
@@ -98,11 +100,17 @@ pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic
         defer response.deinit();
 
         for (response.value.matches) |match| {
-            std.log.debug("match: {any}", .{match});
+            const range = block.translateOffsetAndLength(match.offset, match.length) catch unreachable;
+
+            try diagnostics.append(types.Diagnostic{
+                .range = range,
+                .message = try self.allocator.dupe(u8, match.message),
+                .severity = .Error,
+            });
         }
     }
 
-    return &.{};
+    return try diagnostics.toOwnedSlice();
 }
 
 pub fn encodeParams(params: anytype, writer: anytype) !void {

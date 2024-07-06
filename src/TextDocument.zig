@@ -1,4 +1,5 @@
 const std = @import("std");
+const Range = @import("lsp/types.zig").Range;
 
 allocator: std.heap.ArenaAllocator,
 lines: std.ArrayList(Line),
@@ -28,8 +29,8 @@ pub fn addLine(self: *Self, line: Line) !void {
 
 pub const Line = struct {
     contents: []const u8,
-    line: u64,
-    line_offset: u64,
+    number: u64,
+    offset: u64,
 };
 
 /// A block is a contiguous collection of lines that can make up a line,
@@ -37,14 +38,35 @@ pub const Line = struct {
 pub const Block = struct {
     lines: []const Line,
 
-    const Self = @This();
+    pub const Error = error{
+        OffsetNotWithinRange,
+    };
 
     pub fn init(lines: []const Line) Block {
         return .{ .lines = lines };
     }
 
-    pub fn getLineFromOffset(_: *Block, _: u64) ?Line {
-        return null;
+    pub fn translateOffsetAndLength(self: *const Block, offset: u64, length: u64) Error!Range {
+        var block_offset: u64 = 0;
+
+        for (self.lines) |line| {
+            if (block_offset <= offset and offset < block_offset + line.contents.len) {
+                const start = offset - block_offset + line.offset;
+                return Range{
+                    .start = .{
+                        .line = line.number,
+                        .character = start,
+                    },
+                    .end = .{
+                        .line = line.number,
+                        .character = start + length,
+                    },
+                };
+            }
+            block_offset += line.contents.len;
+        }
+
+        return Error.OffsetNotWithinRange;
     }
 
     pub fn intoText(self: *const Block, allocator: std.mem.Allocator) ![]const u8 {
@@ -62,8 +84,6 @@ pub const BlockIterator = struct {
     lines: []const Line,
     index: u64,
 
-    const Self = @This();
-
     pub fn init(lines: []const Line) BlockIterator {
         return .{ .lines = lines, .index = 0 };
     }
@@ -80,7 +100,7 @@ pub const BlockIterator = struct {
 
             self.index += 1;
 
-            if (next_line.line == current_line.line + 1) {
+            if (next_line.number == current_line.number + 1) {
                 streak += 1;
             } else {
                 break;
@@ -93,15 +113,15 @@ pub const BlockIterator = struct {
 
 test BlockIterator {
     const lines: []const Line = &.{
-        .{ .contents = "", .line = 1, .line_offset = 0 },
-        .{ .contents = "", .line = 2, .line_offset = 0 },
-        .{ .contents = "", .line = 3, .line_offset = 0 },
+        .{ .contents = "", .number = 1, .offset = 0 },
+        .{ .contents = "", .number = 2, .offset = 0 },
+        .{ .contents = "", .number = 3, .offset = 0 },
 
-        .{ .contents = "", .line = 5, .line_offset = 0 },
+        .{ .contents = "", .number = 5, .offset = 0 },
 
-        .{ .contents = "", .line = 10, .line_offset = 0 },
-        .{ .contents = "", .line = 11, .line_offset = 0 },
-        .{ .contents = "", .line = 12, .line_offset = 0 },
+        .{ .contents = "", .number = 10, .offset = 0 },
+        .{ .contents = "", .number = 11, .offset = 0 },
+        .{ .contents = "", .number = 12, .offset = 0 },
     };
 
     var iterator = BlockIterator.init(lines);

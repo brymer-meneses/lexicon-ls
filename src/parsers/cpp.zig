@@ -22,9 +22,21 @@ pub const Parser = struct {
             .state = .{
                 .start = 0,
                 .current = 0,
-                .line = 1,
+                .line = 0,
             },
         };
+    }
+
+    pub fn getLastLine(self: *Self) u64 {
+        var i = self.state.start;
+
+        while (i != 0) {
+            if (self.source[i] == '\n') {
+                return i;
+            }
+            i -= 1;
+        }
+        return 0;
     }
 
     pub fn parse(self: *Self) !?TextDocument {
@@ -49,9 +61,12 @@ pub const Parser = struct {
 
                         self.state.current -= 1;
 
+                        std.debug.assert(self.state.start >= self.getLastLine());
+
                         try document.addLine(.{
-                            .line_offset = self.state.current,
-                            .line = self.state.line,
+                            // TODO: calculate line offset this is currently incorrect
+                            .offset = self.state.start,
+                            .number = self.state.line,
                             .contents = self.source[self.state.start + 2 .. self.state.current],
                         });
                     },

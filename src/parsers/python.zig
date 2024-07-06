@@ -22,7 +22,7 @@ pub const Parser = struct {
             .state = .{
                 .start = 0,
                 .current = 0,
-                .line = 1,
+                .line = 0,
             },
         };
     }
@@ -46,8 +46,8 @@ pub const Parser = struct {
                         self.state.current -= 1;
 
                         try document.addLine(.{
-                            .line_offset = self.state.current,
-                            .line = self.state.line,
+                            .offset = self.state.current,
+                            .number = self.state.line,
                             .contents = self.source[self.state.start + 1 .. self.state.current],
                         });
                     },

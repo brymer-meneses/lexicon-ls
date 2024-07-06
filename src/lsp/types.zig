@@ -96,6 +96,11 @@ pub const Diagnostic = struct {
     };
 };
 
+pub const PublishDiagnosticParams = struct {
+    uri: []const u8,
+    diagnostics: []const Diagnostic,
+};
+
 test "proper enum encoding" {
     const allocator = std.testing.allocator;
     const string = try std.json.stringifyAlloc(
