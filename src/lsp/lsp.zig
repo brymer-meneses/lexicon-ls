@@ -73,7 +73,10 @@ fn Server(Writer: type, Reader: type) type {
             }
 
             if (document) |*doc| {
-                _ = try self.languagetool.?.getDiagnostics(doc);
+                const diagnostics = try self.languagetool.?.getDiagnostics(doc);
+                for (diagnostics) |diagnostic| {
+                    _ = diagnostic;
+                }
             } else {
                 std.log.warn("Got a null `TextDocument", .{});
             }

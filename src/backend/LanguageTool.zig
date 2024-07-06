@@ -1,9 +1,7 @@
 const std = @import("std");
 const types = @import("../lsp/types.zig");
-
 const TextDocument = @import("../text_document.zig").TextDocument;
 
-const LanguageTool = @This();
 const Self = @This();
 
 port: []const u8,
@@ -45,6 +43,8 @@ pub fn deinit(self: *Self) !void {
     if (self.process) |*process| {
         _ = try process.kill();
     }
+
+    self.client.deinit();
 }
 
 pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic {
@@ -79,12 +79,27 @@ pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic
             },
         });
 
+        std.log.debug("{s}", .{response_storage.items});
+
         switch (fetch_result.status) {
             .ok => {},
             else => return error.BadRequest,
         }
 
-        std.log.debug("response: {s}", .{response_storage.items});
+        const response = try std.json.parseFromSlice(
+            LanguageToolResponse,
+            self.allocator,
+            response_storage.items,
+            .{
+                .allocate = .alloc_if_needed,
+                .ignore_unknown_fields = true,
+            },
+        );
+        defer response.deinit();
+
+        for (response.value.matches) |match| {
+            std.log.debug("match: {any}", .{match});
+        }
     }
 
     return &.{};
@@ -106,3 +121,36 @@ pub fn encodeParams(params: anytype, writer: anytype) !void {
         });
     }
 }
+
+const LanguageToolResponse = struct {
+    matches: []const Match,
+
+    pub const Match = struct {
+        message: []const u8,
+        shortMessage: []const u8,
+        offset: u64,
+        length: u64,
+        replacements: []struct {
+            value: []const u8,
+        },
+        context: struct {
+            text: []const u8,
+            offset: u64,
+            length: u64,
+        },
+        sentence: []const u8,
+        rule: struct {
+            id: []const u8,
+            subId: ?[]const u8 = null,
+            description: []const u8,
+            urls: ?[]struct {
+                value: []const u8,
+            } = null,
+            issueType: []const u8,
+            category: struct {
+                id: []const u8,
+                name: []const u8,
+            },
+        },
+    };
+};
