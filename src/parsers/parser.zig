@@ -1,8 +1,7 @@
 const std = @import("std");
-const text_document = @import("../text_document.zig");
 
-const TextDocument = text_document.TextDocument;
-const Line = text_document.Line;
+const TextDocument = @import("../TextDocument.zig");
+const Line = TextDocument.Line;
 
 const Language = enum {
     cpp,

@@ -135,5 +135,5 @@ test {
     std.testing.refAllDecls(rpc);
     std.testing.refAllDecls(@import("parsers/parser.zig"));
     std.testing.refAllDecls(@import("lsp/types.zig"));
-    std.testing.refAllDecls(@import("text_document.zig"));
+    std.testing.refAllDecls(@import("TextDocument.zig"));
 }

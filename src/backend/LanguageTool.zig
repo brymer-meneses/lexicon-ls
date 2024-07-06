@@ -1,6 +1,6 @@
 const std = @import("std");
 const types = @import("../lsp/types.zig");
-const TextDocument = @import("../text_document.zig").TextDocument;
+const TextDocument = @import("../TextDocument.zig");
 
 const Self = @This();
 

@@ -1,5 +1,5 @@
 const std = @import("std");
-const TextDocument = @import("../text_document.zig").TextDocument;
+const TextDocument = @import("../TextDocument.zig");
 
 pub const Parser = struct {
     const Self = @This();

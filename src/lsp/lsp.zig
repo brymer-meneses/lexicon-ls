@@ -2,7 +2,7 @@ const std = @import("std");
 const rpc = @import("../rpc.zig");
 const parser = @import("../parsers/parser.zig");
 
-const TextDocument = @import("../text_document.zig").TextDocument;
+const TextDocument = @import("../TextDocument.zig");
 const LanguageTool = @import("../backend/LanguageTool.zig");
 
 pub const types = @import("types.zig");
