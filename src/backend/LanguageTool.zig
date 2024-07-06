@@ -56,7 +56,7 @@ pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic
     defer response_storage.deinit();
 
     var payload_storage = std.ArrayList(u8).init(self.allocator);
-    defer response_storage.deinit();
+    defer payload_storage.deinit();
 
     while (paragraph_iterator.next()) |*paragraph| {
         const text = try paragraph.intoText(self.allocator);
