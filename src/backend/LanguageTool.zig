@@ -33,7 +33,7 @@ pub fn start(self: *Self) !void {
             "--config",
             "server.properties",
             "--port",
-            "8081",
+            self.port,
             "--allow-origin",
         }, self.allocator);
         self.process.?.cwd = self.languagetool_path;
@@ -49,32 +49,60 @@ pub fn deinit(self: *Self) !void {
 
 pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic {
     var paragraph_iterator = doc.iter();
-    const url = try std.fmt.allocPrint(self.allocator, "http://localhost:{s}/check/v2", .{self.port});
+    const url = try std.fmt.allocPrint(self.allocator, "http://localhost:{s}/v2/check", .{self.port});
+    defer self.allocator.free(url);
+
     var response_storage = std.ArrayList(u8).init(self.allocator);
+    defer response_storage.deinit();
+
+    var payload_storage = std.ArrayList(u8).init(self.allocator);
+    defer response_storage.deinit();
 
     while (paragraph_iterator.next()) |*paragraph| {
-        _ = try paragraph.intoText(self.allocator);
+        const text = try paragraph.intoText(self.allocator);
 
-        _ = try self.client.fetch(.{
+        try encodeParams(
+            .{
+                .language = "en-US",
+                .text = text,
+            },
+            payload_storage.writer(),
+        );
+
+        const fetch_result = try self.client.fetch(.{
             .method = .POST,
-            .headers = .{
-                .content_type = .{
-                    .override = "application/x-www-form-urlencoded",
-                },
-            },
-            .extra_headers = &.{
-                .{ .name = "Accept", .value = "*/*" },
-            },
             .server_header_buffer = null,
-            .payload = "text=hi%20there&language=en-US",
+            .payload = payload_storage.items,
             .location = .{ .url = url },
             .response_storage = .{
                 .dynamic = &response_storage,
             },
         });
 
-        std.log.debug("comments: {s}", .{response_storage.items});
+        switch (fetch_result.status) {
+            .ok => {},
+            else => return error.BadRequest,
+        }
+
+        std.log.debug("response: {s}", .{response_storage.items});
     }
 
     return &.{};
+}
+
+pub fn encodeParams(params: anytype, writer: anytype) !void {
+    var is_first = true;
+
+    inline for (std.meta.fields(@TypeOf(params))) |field| {
+        if (is_first) {
+            is_first = false;
+        } else {
+            try writer.writeAll("&");
+        }
+
+        try writer.print("{%}={%}", .{
+            std.Uri.Component{ .raw = field.name },
+            std.Uri.Component{ .raw = @field(params, field.name) },
+        });
+    }
 }
