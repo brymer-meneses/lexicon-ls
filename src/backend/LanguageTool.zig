@@ -5,37 +5,34 @@ const rpc = @import("../rpc.zig");
 
 const Self = @This();
 
-port: []const u8,
 process: ?std.process.Child = null,
-java_path: []const u8,
-languagetool_path: []const u8,
 allocator: std.mem.Allocator,
 client: std.http.Client,
+port: u16 = 0,
 
-pub fn init(allocator: std.mem.Allocator, java_path: []const u8, languagetool_path: []const u8, port: []const u8) !Self {
+pub fn init(allocator: std.mem.Allocator) Self {
     return .{
         .client = std.http.Client{ .allocator = allocator },
         .allocator = allocator,
-        .port = port,
-        .languagetool_path = languagetool_path,
-        .java_path = java_path,
     };
 }
 
-pub fn start(self: *Self) !void {
+pub fn start(self: *Self, java_path: []const u8, languagetool_path: []const u8, comptime port: u16) !void {
     if (self.process == null) {
+        self.port = port;
+
         self.process = std.process.Child.init(&.{
-            self.java_path,
+            java_path,
             "-cp",
             "languagetool-server.jar",
             "org.languagetool.server.HTTPServer",
             "--config",
             "server.properties",
             "--port",
-            self.port,
+            std.fmt.comptimePrint("{d}", .{port}),
             "--allow-origin",
         }, self.allocator);
-        self.process.?.cwd = self.languagetool_path;
+        self.process.?.cwd = languagetool_path;
         try self.process.?.spawn();
     }
 }
@@ -50,7 +47,7 @@ pub fn deinit(self: *Self) !void {
 
 pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic {
     var block_iterator = doc.iter();
-    const url = try std.fmt.allocPrint(self.allocator, "http://localhost:{s}/v2/check", .{self.port});
+    const url = try std.fmt.allocPrint(self.allocator, "http://localhost:{d}/v2/check", .{self.port});
     defer self.allocator.free(url);
 
     var response_storage = std.ArrayList(u8).init(self.allocator);

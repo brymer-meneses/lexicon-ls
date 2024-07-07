@@ -17,16 +17,14 @@ fn Server(Writer: type, Reader: type) type {
 
         text_documents: std.ArrayList(TextDocument),
 
-        languagetool: ?LanguageTool = null,
+        languagetool: LanguageTool,
 
         pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
-            self.languagetool = try LanguageTool.init(
-                self.allocator,
+            try self.languagetool.start(
                 params.initializationOptions.java_path,
                 params.initializationOptions.languagetool_path,
-                "8081",
+                8081,
             );
-            try self.languagetool.?.start();
 
             try rpc.send(
                 self.allocator,
@@ -58,18 +56,15 @@ fn Server(Writer: type, Reader: type) type {
             }
 
             self.text_documents.deinit();
-
-            if (self.languagetool) |*languagetool| {
-                try languagetool.deinit();
-            }
+            try self.languagetool.deinit();
         }
 
         pub fn textDocumentDidOpen(self: *Self, params: types.DidOpenTextDocumentParams) anyerror!void {
             var document = try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri);
 
             if (document) |*doc| {
-                const diagnostics = try self.languagetool.?.getDiagnostics(doc);
-                defer self.languagetool.?.allocator.free(diagnostics);
+                const diagnostics = try self.languagetool.getDiagnostics(doc);
+                defer self.languagetool.allocator.free(diagnostics);
 
                 try rpc.send(
                     self.allocator,
@@ -106,5 +101,6 @@ pub fn server(allocator: std.mem.Allocator, writer: anytype, reader: anytype) Se
         .allocator = allocator,
         .reader = reader,
         .writer = writer,
+        .languagetool = LanguageTool.init(allocator),
     };
 }
