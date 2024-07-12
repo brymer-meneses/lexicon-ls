@@ -1,19 +1,21 @@
 const std = @import("std");
 const text_document = @import("text_document.zig");
 
+const Line = text_document.Line;
+const LineGroup = text_document.Line;
 const Language = text_document.Language;
 
 pub const extensionToLanguage = std.StaticStringMap(Language).initComptime(
-    .{
-        .{ .key = ".cpp", .value = Language.@"C++" },
-        .{ .key = ".c", .value = Language.C },
-        .{ .key = ".zig", .value = Language.Zig },
-        .{ .key = ".rs", .value = Language.Rust },
-        .{ .key = ".py", .value = Language.Python },
+    &.{
+        .{ ".cpp", Language.@"C++" },
+        .{ ".c", Language.C },
+        .{ ".zig", Language.Zig },
+        .{ ".rs", Language.Rust },
+        .{ ".py", Language.Python },
     },
 );
 
-pub fn parse(_: std.mem.Allocator, _: []const u8, uri: []const u8) !bool {
+pub fn parse(_: std.mem.Allocator, _: []const u8, uri: []const u8) !void {
     const extension = std.fs.path.extension(uri);
     const language = extensionToLanguage.get(extension);
 
@@ -25,8 +27,6 @@ pub fn parse(_: std.mem.Allocator, _: []const u8, uri: []const u8) !bool {
             .Rust => {},
         }
     }
-
-    return null;
 }
 
 pub const Delimiter = union(enum) {
@@ -45,36 +45,59 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
             current: u64,
             start: u64,
             line: u64,
-            last_line: u64,
+            column: u64,
         },
 
         const Self = @This();
 
-        pub fn parse(self: *Self) void {
+        const Result = union(enum) {
+            line: Line,
+            group: LineGroup,
+        };
+
+        pub fn parse(self: *Self) ?Result {
             while (!self.isAtEnd()) {
                 self.position.start = self.position.current;
 
                 if (self.advance()) |c| {
                     if (c == '\n') {
                         self.position.line += 1;
-                        self.position.last_line = self.position.current - 1;
+                        self.position.column = 0;
                         continue;
                     }
 
-                    switch (self.delimiters) {
+                    switch (self.delimiter) {
                         .single => |delim| {
                             if (self.match(delim)) {
-                                while (self.advance()) |_| {
-                                    // if (c1 == '\n') {
-                                    //     // self.document.addLine(line: Line);
-                                    // }
+                                while (self.advance()) |c1| {
+                                    if (c1 == '\n') {
+                                        return .{
+                                            .line = .{
+                                                .number = self.position.line,
+                                                .column = self.position.column,
+                                                .contents = self.source[self.position.start + delim.len + 1 .. self.position.current - 1],
+                                            },
+                                        };
+                                    }
                                 }
                             }
                         },
-                        .double => |_| {},
+                        .double => |delim| {
+                            if (self.match(delim.start)) {
+                                while (self.advance()) |c1| {
+                                    if (self.match(delim.end)) {
+                                        return .{
+
+                                        }
+                                    }
+                                }
+                            }
+                        },
                     }
                 }
             }
+
+            return null;
         }
 
         pub fn init(source: []const u8) Self {
@@ -85,7 +108,7 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
                     .current = 0,
                     // the lsp spec wants 0 indexed line
                     .line = 0,
-                    .last_line = 0,
+                    .column = 0,
                 },
             };
         }
@@ -107,6 +130,7 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
         fn match(self: *Self, comptime value: []const u8) bool {
             if (self.peekMatch(value)) {
                 self.position.current += value.len;
+                self.position.column += value.len;
                 return true;
             }
 
@@ -117,8 +141,9 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
             if (self.isAtEnd())
                 return null;
 
-            const c = self.source[self.state.current];
+            const c = self.source[self.position.current];
             self.position.current += 1;
+            self.position.column += 1;
             return c;
         }
 
@@ -128,32 +153,44 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
     };
 }
 
-// test parse {
-//     const source =
-//         \\ // This is a very important function
-//         \\ // and this is an important documentation
-//         \\ u64 fib(u64 n) {
-//         \\  if (n <= 1)
-//         \\    return 1;
-//         \\
-//         \\  // fun fact:
-//         \\  // this function has an algorithm that is O(1)
-//         \\  // it was discovered a long time ago.
-//         \\  return fib(n-1) + fib(n-2);
-//         \\ }
-//     ;
-//
-//     var doc = try parse(std.testing.allocator, source, "fib.cpp");
-//     defer doc.?.deinit();
-//     var blockIter = doc.?.iter();
-//
-//     const firstDoc = try blockIter.next().?.intoText(std.testing.allocator);
-//     defer std.testing.allocator.free(firstDoc);
-//
-//     const secondDoc = try blockIter.next().?.intoText(std.testing.allocator);
-//     defer std.testing.allocator.free(secondDoc);
-//
-//     try std.testing.expectEqualStrings(firstDoc, " This is a very important function and this is an important documentation");
-//     try std.testing.expectEqualStrings(secondDoc, " fun fact: this function has an algorithm that is O(1) it was discovered a long time ago.");
-// }
-//
+test "GenericParser Single Delimiter" {
+    const source =
+        \\ // This is a very important function
+        \\ // and this is an important documentation
+        \\ u64 fib(u64 n) {
+        \\  if (n <= 1)
+        \\    return 1;
+        \\
+        \\  // fun fact:
+        \\  // this function has an algorithm that is O(1)
+        \\  // it was discovered a long time ago.
+        \\  return fib(n-1) + fib(n-2);
+        \\ }
+    ;
+
+    var parser = GenericParser(.{ .single = "// " }).init(source);
+    try std.testing.expectEqualStrings("This is a very important function", parser.parse().?.contents);
+    try std.testing.expectEqualStrings("and this is an important documentation", parser.parse().?.contents);
+    try std.testing.expectEqualStrings("fun fact:", parser.parse().?.contents);
+    try std.testing.expectEqualStrings("this function has an algorithm that is O(1)", parser.parse().?.contents);
+    try std.testing.expectEqualStrings("it was discovered a long time ago.", parser.parse().?.contents);
+}
+
+test "GenericParser Double Delimiter" {
+    const source =
+        \\ def some_important_function():
+        \\ """"
+        \\ The quick brown fox
+        \\ jumped over the lazy cat
+        \\ """"
+    ;
+
+    _ = GenericParser(
+        .{
+            .double = .{
+                .start = "\"\"\"",
+                .end = "\"\"\"",
+            },
+        },
+    ).init(source);
+}

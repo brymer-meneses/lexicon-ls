@@ -14,7 +14,7 @@ pub const Line = struct {
     /// line number
     number: u64,
     /// starting offset in the line
-    offset: u64,
+    column: u64,
     /// contents of the line we only care about
     contents: []const u8,
 };
