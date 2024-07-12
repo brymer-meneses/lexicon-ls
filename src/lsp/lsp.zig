@@ -1,8 +1,6 @@
 const std = @import("std");
 const rpc = @import("../rpc.zig");
-const parser = @import("../parsers/parser.zig");
 
-const TextDocument = @import("../TextDocument.zig");
 const LanguageTool = @import("../backend/LanguageTool.zig");
 
 pub const types = @import("types.zig");
@@ -15,7 +13,6 @@ fn Server(Writer: type, Reader: type) type {
         writer: Writer,
         allocator: std.mem.Allocator,
 
-        text_documents: std.ArrayList(TextDocument),
 
         languagetool: LanguageTool,
 
@@ -51,40 +48,18 @@ fn Server(Writer: type, Reader: type) type {
         }
 
         pub fn shutdown(self: *Self) anyerror!void {
-            for (self.text_documents.items) |*document| {
-                document.deinit();
-            }
-
-            self.text_documents.deinit();
+            // for (self.text_documents.items) |*document| {
+            //     document.deinit();
+            // }
+            //
+            // self.text_documents.deinit();
             try self.languagetool.deinit();
         }
 
-        pub fn textDocumentDidOpen(self: *Self, params: types.DidOpenTextDocumentParams) anyerror!void {
-            var document = try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri);
+        pub fn textDocumentDidOpen(_: *Self, _: types.DidOpenTextDocumentParams) anyerror!void {
+            // const document = try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri);
 
-            if (document) |*doc| {
-                const diagnostics = try self.languagetool.getDiagnostics(doc);
-                defer self.languagetool.allocator.free(diagnostics);
-
-                try rpc.send(
-                    self.allocator,
-                    self.writer,
-                    .{
-                        .jsonrpc = "2.0",
-                        .method = "textDocument/publishDiagnostics",
-                        .params = types.PublishDiagnosticParams{
-                            .uri = params.textDocument.uri,
-                            .diagnostics = diagnostics,
-                        },
-                    },
-                );
-            } else {
-                std.log.warn("Got a null `TextDocument", .{});
-            }
-
-            if (document) |doc| {
-                try self.text_documents.append(doc);
-            }
+            // _ = document;
         }
 
         pub fn textDocumentDidChange(_: *Self, params: types.DidChangeTextDocumentParams) anyerror!void {
@@ -97,7 +72,7 @@ fn Server(Writer: type, Reader: type) type {
 
 pub fn server(allocator: std.mem.Allocator, writer: anytype, reader: anytype) Server(@TypeOf(writer), @TypeOf(reader)) {
     return .{
-        .text_documents = std.ArrayList(TextDocument).init(allocator),
+        // .text_documents = std.ArrayList(TextDocument).init(allocator),
         .allocator = allocator,
         .reader = reader,
         .writer = writer,

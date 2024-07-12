@@ -1,6 +1,6 @@
 const std = @import("std");
 const types = @import("../lsp/types.zig");
-const TextDocument = @import("../TextDocument.zig");
+// const TextDocument = @import("../TextDocument.zig");
 const rpc = @import("../rpc.zig");
 
 const Self = @This();
@@ -45,70 +45,70 @@ pub fn deinit(self: *Self) !void {
     self.client.deinit();
 }
 
-pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic {
-    var block_iterator = doc.iter();
-    const url = try std.fmt.allocPrint(self.allocator, "http://localhost:{d}/v2/check", .{self.port});
-    defer self.allocator.free(url);
-
-    var response_storage = std.ArrayList(u8).init(self.allocator);
-    defer response_storage.deinit();
-
-    var payload_storage = std.ArrayList(u8).init(self.allocator);
-    defer payload_storage.deinit();
-
-    var diagnostics = std.ArrayList(types.Diagnostic).init(self.allocator);
-    defer diagnostics.deinit();
-
-    while (block_iterator.next()) |*block| {
-        const text = try block.intoText(self.allocator);
-
-        try encodeParams(
-            .{
-                .language = "en-US",
-                .text = text,
-            },
-            payload_storage.writer(),
-        );
-
-        const fetch_result = try self.client.fetch(.{
-            .method = .POST,
-            .server_header_buffer = null,
-            .payload = payload_storage.items,
-            .location = .{ .url = url },
-            .response_storage = .{
-                .dynamic = &response_storage,
-            },
-        });
-
-        switch (fetch_result.status) {
-            .ok => {},
-            else => return error.BadRequest,
-        }
-
-        const response = try std.json.parseFromSlice(
-            LanguageToolResponse,
-            self.allocator,
-            response_storage.items,
-            .{
-                .allocate = .alloc_if_needed,
-                .ignore_unknown_fields = true,
-            },
-        );
-        defer response.deinit();
-
-        for (response.value.matches) |match| {
-            const range = block.translateOffsetAndLength(match.offset, match.length) catch unreachable;
-
-            try diagnostics.append(types.Diagnostic{
-                .range = range,
-                .message = try self.allocator.dupe(u8, match.message),
-                .severity = .Error,
-            });
-        }
-    }
-
-    return try diagnostics.toOwnedSlice();
-}
+// pub fn getDiagnostics(self: *Self, doc: *TextDocument) ![]const types.Diagnostic {
+//     var block_iterator = doc.iter();
+//     const url = try std.fmt.allocPrint(self.allocator, "http://localhost:{d}/v2/check", .{self.port});
+//     defer self.allocator.free(url);
+//
+//     var response_storage = std.ArrayList(u8).init(self.allocator);
+//     defer response_storage.deinit();
+//
+//     var payload_storage = std.ArrayList(u8).init(self.allocator);
+//     defer payload_storage.deinit();
+//
+//     var diagnostics = std.ArrayList(types.Diagnostic).init(self.allocator);
+//     defer diagnostics.deinit();
+//
+//     while (block_iterator.next()) |*block| {
+//         const text = try block.intoText(self.allocator);
+//
+//         try encodeParams(
+//             .{
+//                 .language = "en-US",
+//                 .text = text,
+//             },
+//             payload_storage.writer(),
+//         );
+//
+//         const fetch_result = try self.client.fetch(.{
+//             .method = .POST,
+//             .server_header_buffer = null,
+//             .payload = payload_storage.items,
+//             .location = .{ .url = url },
+//             .response_storage = .{
+//                 .dynamic = &response_storage,
+//             },
+//         });
+//
+//         switch (fetch_result.status) {
+//             .ok => {},
+//             else => return error.BadRequest,
+//         }
+//
+//         const response = try std.json.parseFromSlice(
+//             LanguageToolResponse,
+//             self.allocator,
+//             response_storage.items,
+//             .{
+//                 .allocate = .alloc_if_needed,
+//                 .ignore_unknown_fields = true,
+//             },
+//         );
+//         defer response.deinit();
+//
+//         for (response.value.matches) |match| {
+//             const range = block.translateOffsetAndLength(match.offset, match.length) catch unreachable;
+//
+//             try diagnostics.append(types.Diagnostic{
+//                 .range = range,
+//                 .message = try self.allocator.dupe(u8, match.message),
+//                 .severity = .Error,
+//             });
+//         }
+//     }
+//
+//     return try diagnostics.toOwnedSlice();
+// }
 
 pub fn encodeParams(params: anytype, writer: anytype) !void {
     var is_first = true;

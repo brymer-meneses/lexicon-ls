@@ -4,6 +4,8 @@ const rpc = @import("rpc.zig");
 
 pub const std_options = .{
     .logFn = @import("log.zig").log,
+    .log_level = .info,
+    .http_disable_tls = true,
 };
 
 const helpMessage =
@@ -133,10 +135,8 @@ pub fn lintMain(_: std.mem.Allocator, _: []const []const u8) anyerror!void {
 
 test {
     std.testing.refAllDecls(rpc);
-    std.testing.refAllDecls(@import("parsers/parser.zig"));
-    std.testing.refAllDecls(@import("parsers/python.zig"));
-    std.testing.refAllDecls(@import("parsers/cpp.zig"));
+    std.testing.refAllDecls(@import("parser.zig"));
 
     std.testing.refAllDecls(@import("lsp/types.zig"));
-    std.testing.refAllDecls(@import("TextDocument.zig"));
+    std.testing.refAllDecls(@import("text_document.zig"));
 }
