@@ -16,7 +16,7 @@ pub const InitializeRequestParams = struct {
 
     initializationOptions: struct {
         java_path: []const u8,
-        languagetool_path: []const u8,
+        language_tool_path: []const u8,
     },
 };
 
@@ -83,6 +83,7 @@ pub const Diagnostic = struct {
     range: Range,
     message: []const u8,
     severity: Severity,
+    source: []const u8,
 
     pub const Severity = enum(u8) {
         Error = 1,

@@ -19,6 +19,17 @@ pub const Line = struct {
     /// contents of the line we only care about
     /// this is an owned copy of a string
     contents: []const u8,
+
+    const Self = @This();
+
+    pub fn contentWithoutDelimiter(self: *const Self, delimiter: Delimiter) []const u8 {
+        return switch (delimiter) {
+            .single => |delim| self.contents[delim.len..],
+            .double => {
+                @panic("Unimpemented");
+            },
+        };
+    }
 };
 
 pub const LineGroup = struct {
