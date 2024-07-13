@@ -1,11 +1,22 @@
 const std = @import("std");
 const rpc = @import("../rpc.zig");
-const parser = @import("../parsers/parser.zig");
+const parser = @import("../parser.zig");
 
-const TextDocument = @import("../TextDocument.zig");
-const LanguageTool = @import("../backend/LanguageTool.zig");
+const TextDocument = @import("../text_document.zig").TextDocument;
+const Language = @import("../text_document.zig").Language;
+const LanguageTool = @import("../language_tool.zig").LanguageTool;
 
 pub const types = @import("types.zig");
+
+const extensionToLanguage = std.StaticStringMap(Language).initComptime(
+    &.{
+        .{ ".cpp", Language.@"C++" },
+        .{ ".c", Language.C },
+        .{ ".zig", Language.Zig },
+        .{ ".rs", Language.Rust },
+        .{ ".py", Language.Python },
+    },
+);
 
 fn Server(Writer: type, Reader: type) type {
     return struct {
@@ -14,15 +25,14 @@ fn Server(Writer: type, Reader: type) type {
         reader: Reader,
         writer: Writer,
         allocator: std.mem.Allocator,
+        documents: std.ArrayList(TextDocument),
 
-        text_documents: std.ArrayList(TextDocument),
-
-        languagetool: LanguageTool,
+        language_tool: LanguageTool,
 
         pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
-            try self.languagetool.start(
+            try self.language_tool.start(
                 params.initializationOptions.java_path,
-                params.initializationOptions.languagetool_path,
+                params.initializationOptions.language_tool_path,
                 8081,
             );
 
@@ -51,20 +61,32 @@ fn Server(Writer: type, Reader: type) type {
         }
 
         pub fn shutdown(self: *Self) anyerror!void {
-            for (self.text_documents.items) |*document| {
+            for (self.documents.items) |*document| {
                 document.deinit();
             }
+            self.documents.deinit();
 
-            self.text_documents.deinit();
-            try self.languagetool.deinit();
+            try self.language_tool.deinit();
         }
 
         pub fn textDocumentDidOpen(self: *Self, params: types.DidOpenTextDocumentParams) anyerror!void {
-            var document = try parser.parse(self.allocator, params.textDocument.text, params.textDocument.uri);
+            const extension = std.fs.path.extension(params.textDocument.uri);
+            const language = extensionToLanguage.get(extension);
 
-            if (document) |*doc| {
-                const diagnostics = try self.languagetool.getDiagnostics(doc);
-                defer self.languagetool.allocator.free(diagnostics);
+            if (language) |lang| {
+                var document = TextDocument.init(self.allocator, lang);
+
+                try parser.parse(&document, params.textDocument.text);
+                try self.documents.append(document);
+
+                const diagnostics = try self.language_tool.getDiagnostics(&document);
+                defer self.language_tool.allocator.free(diagnostics);
+
+                std.log.warn("got {d} diagnostics", .{diagnostics.len});
+
+                for (diagnostics) |diagnostic| {
+                    std.log.warn("range {any}", .{diagnostic.range});
+                }
 
                 try rpc.send(
                     self.allocator,
@@ -79,17 +101,13 @@ fn Server(Writer: type, Reader: type) type {
                     },
                 );
             } else {
-                std.log.warn("Got a null `TextDocument", .{});
-            }
-
-            if (document) |doc| {
-                try self.text_documents.append(doc);
+                std.log.info("Unsupported file extension: `{s}`.", .{extension});
             }
         }
 
         pub fn textDocumentDidChange(_: *Self, params: types.DidChangeTextDocumentParams) anyerror!void {
             for (params.contentChanges, 0..) |change, i| {
-                std.log.debug("Change {d}:\n{s} {any}", .{ i, change.text, change.range.? });
+                std.log.info("Change {d}:\n{s} {any}", .{ i, change.text, change.range.? });
             }
         }
     };
@@ -97,10 +115,10 @@ fn Server(Writer: type, Reader: type) type {
 
 pub fn server(allocator: std.mem.Allocator, writer: anytype, reader: anytype) Server(@TypeOf(writer), @TypeOf(reader)) {
     return .{
-        .text_documents = std.ArrayList(TextDocument).init(allocator),
+        .documents = std.ArrayList(TextDocument).init(allocator),
         .allocator = allocator,
         .reader = reader,
         .writer = writer,
-        .languagetool = LanguageTool.init(allocator),
+        .language_tool = LanguageTool.init(allocator),
     };
 }

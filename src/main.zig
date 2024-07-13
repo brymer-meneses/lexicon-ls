@@ -4,6 +4,8 @@ const rpc = @import("rpc.zig");
 
 pub const std_options = .{
     .logFn = @import("log.zig").log,
+    .log_level = .info,
+    .http_disable_tls = true,
 };
 
 const helpMessage =
@@ -59,6 +61,7 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
 
     const stdin = std.io.getStdIn();
     const stdout = std.io.getStdOut();
+    const stderr = std.io.getStdErr();
     var buf = std.io.bufferedReader(stdin.reader());
 
     const reader = buf.reader();
@@ -87,12 +90,20 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
 
         if (std.mem.eql(u8, method, "initialize")) {
             // TODO: gracefully handle initialization errors
-            const request = try std.json.parseFromSlice(
+            const request = std.json.parseFromSlice(
                 struct { params: lsp.types.InitializeRequestParams },
                 allocator,
                 content,
                 jsonOptions,
-            );
+            ) catch |err| switch (err) {
+                error.MissingField => {
+                    stderr.writer().print("[LexiconLS]: Initialization field make sure you have all the required parameters on your setup function");
+                },
+                else => {
+                    stderr.writer().print("[LexiconLS]: Unknown error.");
+                },
+            };
+
             defer request.deinit();
 
             try server.initialize(requestHeader.value, request.value.params);
@@ -133,10 +144,9 @@ pub fn lintMain(_: std.mem.Allocator, _: []const []const u8) anyerror!void {
 
 test {
     std.testing.refAllDecls(rpc);
-    std.testing.refAllDecls(@import("parsers/parser.zig"));
-    std.testing.refAllDecls(@import("parsers/python.zig"));
-    std.testing.refAllDecls(@import("parsers/cpp.zig"));
+    std.testing.refAllDecls(@import("text_document.zig"));
+    std.testing.refAllDecls(@import("language_tool.zig"));
+    std.testing.refAllDecls(@import("parser.zig"));
 
     std.testing.refAllDecls(@import("lsp/types.zig"));
-    std.testing.refAllDecls(@import("TextDocument.zig"));
 }
