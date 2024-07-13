@@ -1,8 +1,8 @@
 const std = @import("std");
 const text_document = @import("text_document.zig");
 
+const TextDocument = text_document.TextDocument;
 const Line = text_document.Line;
-const LineGroup = text_document.Line;
 const Language = text_document.Language;
 
 pub const extensionToLanguage = std.StaticStringMap(Language).initComptime(
@@ -37,83 +37,106 @@ pub const Delimiter = union(enum) {
     single: []const u8,
 };
 
-pub fn GenericParser(comptime delimiters: Delimiter) type {
+pub fn GenericParser(comptime delimiters: []const Delimiter) type {
     return struct {
-        comptime delimiter: Delimiter = delimiters,
+        comptime delimiters: []const Delimiter = delimiters,
+
         source: []const u8,
         position: struct {
             current: u64,
             start: u64,
             line: u64,
-            column: u64,
+            last_line: u64,
         },
+        document: *TextDocument,
 
         const Self = @This();
 
-        const Result = union(enum) {
-            line: Line,
-            group: LineGroup,
-        };
-
-        pub fn parse(self: *Self) ?Result {
+        pub fn parse(self: *Self) !void {
             while (!self.isAtEnd()) {
                 self.position.start = self.position.current;
 
                 if (self.advance()) |c| {
                     if (c == '\n') {
                         self.position.line += 1;
-                        self.position.column = 0;
                         continue;
                     }
 
-                    switch (self.delimiter) {
-                        .single => |delim| {
-                            if (self.match(delim)) {
-                                while (self.advance()) |c1| {
-                                    if (c1 == '\n') {
-                                        return .{
-                                            .line = .{
-                                                .number = self.position.line,
-                                                .column = self.position.column,
-                                                .contents = self.source[self.position.start + delim.len + 1 .. self.position.current - 1],
-                                            },
-                                        };
-                                    }
-                                }
-                            }
-                        },
-                        .double => |delim| {
-                            if (self.match(delim.start)) {
-                                while (self.advance()) |c1| {
-                                    if (self.match(delim.end)) {
-                                        return .{
-
-                                        }
-                                    }
-                                }
-                            }
-                        },
+                    for (self.delimiters) |delimiter| {
+                        try self.parseDelimiter(delimiter);
                     }
                 }
             }
-
-            return null;
         }
 
-        pub fn init(source: []const u8) Self {
+        fn parseDelimiter(self: *Self, delimiter: Delimiter) !void {
+            switch (delimiter) {
+                .single => |delim| {
+                    if (self.match(delim)) {
+                        while (self.advance()) |c1| {
+                            if (c1 == '\n') {
+                                try self.document.addLine(
+                                    delimiter,
+                                    .{
+                                        .number = self.position.line,
+                                        .column = self.position.start - self.position.last_line,
+                                        .contents = self.source[self.position.start + 1 .. self.position.current],
+                                    },
+                                );
+                                self.position.line += 1;
+                                break;
+                            }
+                        }
+                    }
+                },
+                .double => |delim| {
+                    if (self.match(delim.start)) {
+                        while (self.advance()) |c1| {
+                            if (c1 == '\n') {
+                                try self.document.addLine(
+                                    delimiter,
+                                    .{
+                                        .number = self.position.line,
+                                        .column = self.position.start - self.position.last_line,
+                                        .contents = self.source[self.position.start + 1 .. self.position.current],
+                                    },
+                                );
+                                self.position.line += 1;
+                            }
+
+                            if (self.match(delim.end)) {
+                                try self.document.addLine(
+                                    delimiter,
+                                    .{
+                                        .number = self.position.line,
+                                        .column = self.position.start - self.position.last_line,
+                                        .contents = self.source[self.position.start + 1 .. self.position.current],
+                                    },
+                                );
+                                self.position.line += 1;
+                                break;
+                            }
+                        }
+                    }
+                },
+            }
+        }
+
+        pub fn init(source: []const u8, document: *TextDocument) Self {
             return .{
                 .source = source,
+                .document = document,
                 .position = .{
                     .start = 0,
                     .current = 0,
                     // the lsp spec wants 0 indexed line
                     .line = 0,
-                    .column = 0,
+                    .last_line = 0,
                 },
             };
         }
 
-        fn peekMatch(self: *const Self, comptime value: []const u8) bool {
+        fn peekMatch(self: *const Self, value: []const u8) bool {
             if (self.position.current + value.len >= self.source.len) {
                 return false;
             }
@@ -127,10 +150,9 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
             return false;
         }
 
-        fn match(self: *Self, comptime value: []const u8) bool {
+        fn match(self: *Self, value: []const u8) bool {
             if (self.peekMatch(value)) {
                 self.position.current += value.len;
-                self.position.column += value.len;
                 return true;
             }
 
@@ -143,7 +165,6 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
 
             const c = self.source[self.position.current];
             self.position.current += 1;
-            self.position.column += 1;
             return c;
         }
 
@@ -154,6 +175,8 @@ pub fn GenericParser(comptime delimiters: Delimiter) type {
 }
 
 test "GenericParser Single Delimiter" {
+    const allocator = std.testing.allocator;
+
     const source =
         \\ // This is a very important function
         \\ // and this is an important documentation
@@ -168,29 +191,40 @@ test "GenericParser Single Delimiter" {
         \\ }
     ;
 
-    var parser = GenericParser(.{ .single = "// " }).init(source);
-    try std.testing.expectEqualStrings("This is a very important function", parser.parse().?.contents);
-    try std.testing.expectEqualStrings("and this is an important documentation", parser.parse().?.contents);
-    try std.testing.expectEqualStrings("fun fact:", parser.parse().?.contents);
-    try std.testing.expectEqualStrings("this function has an algorithm that is O(1)", parser.parse().?.contents);
-    try std.testing.expectEqualStrings("it was discovered a long time ago.", parser.parse().?.contents);
+    const delimiters: []const Delimiter = &.{
+        .{ .single = "// " },
+    };
+
+    var document = TextDocument.init(allocator, Language.@"C++");
+    defer document.deinit();
+
+    var parser = GenericParser(delimiters).init(source, &document);
+    try parser.parse();
+
+    try std.testing.expectEqual(5, document.lines.items.len);
+
+    const line_groups = try document.lineGroups();
+    defer allocator.free(line_groups);
+
+    try std.testing.expectEqual(2, line_groups.len);
+
+    const expectedStrings: []const []const u8 = &.{
+        \\This is a very important function
+        \\and this is an important documentation
+        \\
+        ,
+        \\fun fact:
+        \\this function has an algorithm that is O(1)
+        \\it was discovered a long time ago.
+        \\
+    };
+
+    for (line_groups, expectedStrings) |line_group, expected| {
+        const contents = try line_group.contents(allocator);
+        defer allocator.free(contents);
+
+        try std.testing.expectEqualStrings(expected, contents);
+    }
 }
 
-test "GenericParser Double Delimiter" {
-    const source =
-        \\ def some_important_function():
-        \\ """"
-        \\ The quick brown fox
-        \\ jumped over the lazy cat
-        \\ """"
-    ;
-
-    _ = GenericParser(
-        .{
-            .double = .{
-                .start = "\"\"\"",
-                .end = "\"\"\"",
-            },
-        },
-    ).init(source);
-}
+test "GenericParser Double Delimiter" {}

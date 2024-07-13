@@ -135,8 +135,8 @@ pub fn lintMain(_: std.mem.Allocator, _: []const []const u8) anyerror!void {
 
 test {
     std.testing.refAllDecls(rpc);
+    std.testing.refAllDecls(@import("text_document.zig"));
     std.testing.refAllDecls(@import("parser.zig"));
 
     std.testing.refAllDecls(@import("lsp/types.zig"));
-    std.testing.refAllDecls(@import("text_document.zig"));
 }

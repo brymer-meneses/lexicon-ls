@@ -13,7 +13,6 @@ fn Server(Writer: type, Reader: type) type {
         writer: Writer,
         allocator: std.mem.Allocator,
 
-
         languagetool: LanguageTool,
 
         pub fn initialize(self: *Self, header: types.RequestHeader, params: types.InitializeRequestParams) anyerror!void {
@@ -34,7 +33,7 @@ fn Server(Writer: type, Reader: type) type {
                         .capabilities = .{
                             .positionEncoding = "utf-8",
                             .textDocumentSync = .{
-                                .change = types.TextDocumentSyncKind.Incremental,
+                                .change = types.TextDocumentSyncKind.Full,
                                 .openClose = true,
                             },
                         },
@@ -64,7 +63,7 @@ fn Server(Writer: type, Reader: type) type {
 
         pub fn textDocumentDidChange(_: *Self, params: types.DidChangeTextDocumentParams) anyerror!void {
             for (params.contentChanges, 0..) |change, i| {
-                std.log.debug("Change {d}:\n{s} {any}", .{ i, change.text, change.range.? });
+                std.log.info("Change {d}:\n{s} {any}", .{ i, change.text, change.range.? });
             }
         }
     };
