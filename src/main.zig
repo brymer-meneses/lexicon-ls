@@ -97,10 +97,12 @@ pub fn lspMain(allocator: std.mem.Allocator, _: []const []const u8) anyerror!voi
                 jsonOptions,
             ) catch |err| switch (err) {
                 error.MissingField => {
-                    stderr.writer().print("[LexiconLS]: Initialization field make sure you have all the required parameters on your setup function");
+                    try stderr.writer().print("[LexiconLS]: Initialization field make sure you have all the required parameters on your setup function", .{});
+                    return;
                 },
                 else => {
-                    stderr.writer().print("[LexiconLS]: Unknown error.");
+                    try stderr.writer().print("[LexiconLS]: Unknown error.", .{});
+                    return;
                 },
             };
 

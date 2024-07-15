@@ -2,7 +2,10 @@ const std = @import("std");
 const lsp = @import("lsp/lsp.zig");
 const rpc = @import("../rpc.zig");
 
+const GenericParser = @import("parser.zig").GenericParser;
 const LineGroup = @import("text_document.zig").LineGroup;
+const Line = @import("text_document.zig").Line;
+const Language = @import("text_document.zig").Language;
 const TextDocument = @import("text_document.zig").TextDocument;
 
 pub const LanguageTool = struct {
@@ -105,7 +108,7 @@ pub const LanguageTool = struct {
             std.log.info("Got matches {d} to: {s}", .{ response.value.matches.len, text });
 
             for (response.value.matches) |match| {
-                const range = match.intoLspRange(&line_group) catch unreachable;
+                const range = match.intoLspRange(&line_group) catch continue;
 
                 try diagnostics.append(lsp.types.Diagnostic{
                     .range = range,
@@ -168,24 +171,18 @@ const LanguageToolResponse = struct {
             },
         },
 
-        // TODO: this is still broken :/
+        // we only feed stripped contents to `LanguageTool` that's why we need to translate these
+        // positions to unstripped contents
         fn intoLspRange(self: *const @This(), line_group: *const LineGroup) !lsp.types.Range {
             var total_offset: u64 = 0;
             const delimiter = line_group.delimiter;
 
             for (line_group.lines) |line| {
-                if (total_offset <= self.offset and self.offset < total_offset + line.content.len) {
+                const strippedContentLength = line.contentsWithoutDelimiter(delimiter).len;
+
+                if (total_offset <= self.offset and self.offset < total_offset + strippedContentLength) {
                     const comment_offset = switch (delimiter) {
                         .double => {
-                            // TODO: how do we handle
-                            // <!--- this is a comment ---!>
-                            // and?
-                            //
-                            // <!---
-                            // this is a comment
-                            // ---!>
-                            //
-                            // perhaps just trim the start and end line?
                             @panic("unimplemented");
                         },
                         .single => |delim| delim.len,
@@ -203,10 +200,82 @@ const LanguageToolResponse = struct {
                         },
                     };
                 }
-                total_offset += line.contents.len;
+                total_offset += strippedContentLength;
             }
 
             return error.OffsetNotWithinRange;
         }
     };
 };
+
+fn initEmptyMatch(offset: u64, length: u64) LanguageToolResponse.Match {
+    return .{
+        .shortMessage = undefined,
+        .message = undefined,
+        .replacements = undefined,
+        .context = undefined,
+        .rule = undefined,
+        .sentence = undefined,
+        .offset = offset,
+        .length = length,
+    };
+}
+
+test "LanguageToolResponse.Match.intoLspRange" {
+    const allocator = std.testing.allocator;
+    const source =
+        \\ // the quick brown fox jumped
+        \\ // over the lazy cat
+    ;
+
+    var document = TextDocument.init(allocator, Language.C);
+    defer document.deinit();
+
+    var parser = GenericParser(&.{
+        .{
+            .single = "// ",
+        },
+    }).init(source, &document);
+
+    try parser.parse();
+
+    const line_groups = try document.lineGroups();
+    defer document.allocator.free(line_groups);
+
+    try std.testing.expectEqual(line_groups.len, 1);
+
+    const matches: []const LanguageToolResponse.Match = &.{
+        initEmptyMatch(0, 2),
+        initEmptyMatch(10, 4),
+    };
+
+    const expected_ranges: []const lsp.types.Range = &.{
+        .{
+            .start = .{
+                .line = 0,
+                .character = 4,
+            },
+            .end = .{
+                .line = 0,
+                .character = 6,
+            },
+        },
+        .{
+            .start = .{
+                .line = 0,
+                .character = 14,
+            },
+            .end = .{
+                .line = 0,
+                .character = 18,
+            },
+        },
+    };
+
+    const line_group = line_groups[0];
+
+    for (matches, expected_ranges) |match, expected| {
+        const got = try match.intoLspRange(&line_group);
+        try std.testing.expectEqual(expected, got);
+    }
+}

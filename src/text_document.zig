@@ -16,13 +16,19 @@ pub const Line = struct {
     number: u64,
     /// starting offset in the line
     column: u64,
+
     /// contents of the line we only care about
     /// this is an owned copy of a string
+    ///
+    /// example:
+    /// ```cpp
+    /// // hi there
+    /// ```
     contents: []const u8,
 
     const Self = @This();
 
-    pub fn contentWithoutDelimiter(self: *const Self, delimiter: Delimiter) []const u8 {
+    pub fn contentsWithoutDelimiter(self: *const Self, delimiter: Delimiter) []const u8 {
         return switch (delimiter) {
             .single => |delim| self.contents[delim.len..],
             .double => {
@@ -47,14 +53,7 @@ pub const LineGroup = struct {
         defer text.deinit();
 
         for (self.lines) |line| {
-            switch (self.delimiter) {
-                .single => |delim| {
-                    try text.appendSlice(line.contents[delim.len..]);
-                },
-                .double => {
-                    @panic("Unimpemented");
-                },
-            }
+            try text.appendSlice(line.contentsWithoutDelimiter(self.delimiter));
         }
 
         return text.toOwnedSlice();

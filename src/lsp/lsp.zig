@@ -82,8 +82,6 @@ fn Server(Writer: type, Reader: type) type {
                 const diagnostics = try self.language_tool.getDiagnostics(&document);
                 defer self.language_tool.allocator.free(diagnostics);
 
-                std.log.warn("got {d} diagnostics", .{diagnostics.len});
-
                 for (diagnostics) |diagnostic| {
                     std.log.warn("range {any}", .{diagnostic.range});
                 }
